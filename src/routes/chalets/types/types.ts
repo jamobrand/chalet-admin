@@ -16,7 +16,7 @@ export interface ApiResponse {
 export interface Chalet {
   id: string;
   name: string;
-  type: string;
+  propertyType: string;
   basePrice: string; // Note: Changed to string as that's how it comes from API
   locationName: string;
   isUnderMaintenance: boolean;

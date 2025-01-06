@@ -1,5 +1,6 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Chalet } from './types/types';
+//import { ChaletActions } from './chalet-action';
 
 export const columns: ColumnDef<Chalet>[] = [
   {
@@ -21,13 +22,14 @@ export const columns: ColumnDef<Chalet>[] = [
     header: 'Name',
   },
   {
-    accessorKey: 'type',
+    accessorKey: 'propertyType',
     header: 'Type',
   },
   {
     accessorKey: 'basePrice',
     header: 'Base Price',
-    cell: ({ row }) => `KES ${parseInt(row.original.basePrice).toLocaleString()}`,
+    cell: ({ row }) => `KES ${parseInt(row.original.basePrice).toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`,
   },
   {
     accessorKey: 'locationName',
@@ -60,4 +62,8 @@ export const columns: ColumnDef<Chalet>[] = [
       </span>
     ),
   },
+  // {
+  //     id: 'actions',
+  //     cell: ({ row }) => <ChaletActions chalet={row.original} />,
+  //   },
 ];

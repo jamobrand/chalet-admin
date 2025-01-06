@@ -237,14 +237,16 @@ if (isLoading) {
                       <td className="p-2">{addon.addOn.name}</td>
                       <td className="p-2 text-gray-600">{addon.addOn.description}</td>
                       <td className="p-2 text-right">
-                        KES {parseInt(addon.addOn.price).toLocaleString()}
+                        KES {parseInt(addon.addOn.price).toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                       </td>
                     </tr>
                   ))}
                   <tr className="font-medium">
                     <td colSpan={2} className="p-2 text-right">Total Add-ons:</td>
                     <td className="p-2 text-right">
-                      KES {getTotalAddOnsCost().toLocaleString()}
+                      KES {getTotalAddOnsCost().toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                     </td>
                   </tr>
                 </tbody>
@@ -265,15 +267,22 @@ if (isLoading) {
             <div className="space-y-3">
               <div className="flex justify-between p-2">
                 <span className="text-gray-600">Base Cost:</span>
-                <span>KES {parseInt(booking.totalCost).toLocaleString()}</span>
+                <span>KES  {Number(booking.totalCost)
+                .toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+
+               
+                </span>
               </div>
               <div className="flex justify-between p-2">
                 <span className="text-gray-600">Add-ons:</span>
-                <span>KES {getTotalAddOnsCost().toLocaleString()}</span>
+                <span>KES {getTotalAddOnsCost().toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</span>
               </div>
               <div className="flex justify-between p-2 font-medium border-t">
                 <span>Total Cost:</span>
-                <span>KES {(parseInt(booking.totalCost) + getTotalAddOnsCost()).toLocaleString()}</span>
+                <span>KES {(parseInt(booking.totalCost) + getTotalAddOnsCost()).toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</span>
               </div>
             </div>
           </CardContent>
@@ -301,7 +310,8 @@ if (isLoading) {
                     <tr key={payment.id} className="border-b">
                       <td className="p-2">{payment.transactionId}</td>
                       <td className="p-2">{payment.method.replace('_', ' ')}</td>
-                      <td className="p-2">KES {parseInt(payment.amount).toLocaleString()}</td>
+                      <td className="p-2">KES {parseInt(payment.amount).toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
                       <td className="p-2">
                         <Badge variant="outline">
                           {payment.status.replace('_', ' ')}

@@ -55,7 +55,10 @@ export const columns: ColumnDef<ChaletBooking>[] = [
   {
     accessorKey: 'totalCost',
     header: 'Total Cost',
-    cell: ({ row }) => `KES ${parseInt(row.original.totalCost).toLocaleString()}`,
+    cell: ({ row }) =>
+      `KES ${parseInt(row.original.totalCost)
+        .toFixed(2)
+        .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`,
   },
   {
     accessorKey: 'status',

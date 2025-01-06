@@ -26,8 +26,12 @@ interface ChaletDetails {
 
 interface RoomDetail {
   roomType: string | undefined;
-  room: number;
+  numberOfRooms: number;
   capacity: number;
+  floor: number;
+  notEnsuite: boolean;
+  hasBunkBed: boolean;
+  bunkBedCapacity?: number;
 }
 
 interface Location {
@@ -147,6 +151,18 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     </p>
                     <p>
                       <strong>Capacity:</strong> {room.capacity} guests
+                    </p>
+                    <p>
+                      <strong>Has Bunked Room {index + 1}:</strong> {room.hasBunkBed}
+                    </p>
+                    <p>
+                      <strong>Ensuite:</strong> {room.notEnsuite}
+                    </p>
+                    <p>
+                      <strong>Rooms {index + 1}:</strong> {room.numberOfRooms}
+                    </p>
+                    <p>
+                      <strong>Bunker Capacity:</strong> {room.bunkBedCapacity} 
                     </p>
                   </div>
                 </div>

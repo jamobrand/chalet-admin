@@ -4,8 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { columns } from './columns';
+import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Reservations = () => {
+  const navigate = useNavigate();
+
   const { data, isLoading, error } = useReservations();
 
   if (error) {
@@ -29,10 +34,17 @@ const Reservations = () => {
               <CardTitle className="text-xl text-[#1a3733] line-clamp-1">
                 Reservations Management
               </CardTitle>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Badge variant="outline" className="text-sm">
                   Total Reservations: {data?.length || 0}
                 </Badge>
+                <Button 
+                  onClick={() => navigate('/admin/reservations/new')}
+                  className="bg-[#27534c] hover:bg-[#1c3d38]"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Reservation
+                </Button>
               </div>
             </div>
           </CardHeader>

@@ -18,12 +18,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ChevronRight } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import { useChaletContext } from '@/context/use-chalet';
-import { ChaletDetailsData } from '@/context/types';
+import { ChaletDetailsData, PropertyType } from '@/context/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChaletDetailsSchema } from '../../types/chalet-schema';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { useGetOwners } from '@/routes/owners/hook/useGetOwners';
 
 interface ChaletDetailsStepProps {
   setCurrentStep: (step: number) => void;
@@ -35,16 +38,29 @@ export const ChaletDetailsStep: React.FC<ChaletDetailsStepProps> = ({
   setTotalRooms,
 }) => {
   const { updateChaletData, chaletData } = useChaletContext();
+  const [open, setOpen] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState('');
+
+  const { data, isLoading } = useGetOwners();
 
   const form = useForm<ChaletDetailsData>({
     resolver: zodResolver(ChaletDetailsSchema),
     defaultValues: {
       name: chaletData.chaletDetails?.name || '',
-      type: chaletData.chaletDetails?.type || '',
+      type: chaletData.chaletDetails?.type || PropertyType.STANDALONE,
       description: chaletData.chaletDetails?.description || '',
       basePrice: chaletData.chaletDetails?.basePrice || 0,
+      weekendPrice: chaletData.chaletDetails?.weekendPrice || 0,
       roomCount: chaletData.chaletDetails?.roomCount || 1,
       isEnsuite: chaletData.chaletDetails?.isEnsuite || false,
+      totalWashrooms: chaletData.chaletDetails?.totalWashrooms || 0,
+      totalFloors: chaletData.chaletDetails?.totalFloors || 0,
+      hasUpstairsLounge: Boolean(chaletData.chaletDetails?.hasUpstairsLounge) || false,
+      hasDownstairsLounge: Boolean(chaletData.chaletDetails?.hasDownstairsLounge) || false,
+      maxAdults: chaletData.chaletDetails?.maxAdults || 1,
+      maxChildren: chaletData.chaletDetails?.maxChildren || 0,
+      totalSleeps: chaletData.chaletDetails?.totalSleeps || 0,
+      ownerId: chaletData.chaletDetails?.ownerId || '',
     },
   });
 
@@ -56,10 +72,10 @@ export const ChaletDetailsStep: React.FC<ChaletDetailsStepProps> = ({
     setTotalRooms(data.roomCount);
 
     // Move to next step
-    setCurrentStep(2);
+     setCurrentStep(2);
   };
 
-  const chaletTypes = ['Duplex Lower', 'Stand Alone Unit', 'Duplex Upper'];
+  const chaletTypes = ['DUPLEX_LOWER', 'STANDALONE', 'DUPLEX_UPPER'];
 
   return (
     <Card className="w-full max-w-5xl">
@@ -70,19 +86,102 @@ export const ChaletDetailsStep: React.FC<ChaletDetailsStepProps> = ({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Chalet Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter chalet name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-2 gap-4">
+              {/* Owner Selection with Command */}
               <FormField
                 control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Chalet Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter chalet name" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                name="ownerId"
+                render={({ field }) => {
+                  const ownersList = data?.owners || [];
+                  const selectedOwner = ownersList.find((owner) => owner.id === field.value);
+
+                  const filteredOwners = ownersList.filter((owner) =>
+                    owner.name.toLowerCase().includes(searchTerm.toLowerCase()),
+                  );
+
+                  return (
+                    <FormItem>
+                      <FormLabel>Owner</FormLabel>
+                      <Popover open={open} onOpenChange={setOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className={cn(
+                                'w-full justify-between',
+                                !field.value && 'text-muted-foreground',
+                              )}
+                            >
+                              {selectedOwner ? selectedOwner.name : 'Select owner'}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[300px] p-2">
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Search owners..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="mb-2"
+                            />
+                            <div className="max-h-[200px] overflow-auto">
+                              {isLoading ? (
+                                <div className="p-2 text-center">Loading owners...</div>
+                              ) : filteredOwners.length > 0 ? (
+                                <div className="space-y-1">
+                                  {filteredOwners.map((owner) => (
+                                    <button
+                                      key={owner.id}
+                                      onClick={() => {
+                                        form.setValue('ownerId', owner.id);
+                                        setOpen(false);
+                                        setSearchTerm('');
+                                      }}
+                                      className={cn(
+                                        'flex items-center gap-2 w-full p-2 rounded-md hover:bg-slate-100',
+                                        owner.id === field.value && 'bg-slate-100',
+                                      )}
+                                    >
+                                      <img
+                                        src={owner.photo.image}
+                                        alt={owner.name}
+                                        className="h-6 w-6 rounded-full object-cover"
+                                      />
+                                      <span>{owner.name}</span>
+                                      {owner.id === field.value && (
+                                        <Check className="h-4 w-4 ml-auto" />
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="p-2 text-center text-muted-foreground">
+                                  No owners found
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
 
               <FormField
@@ -109,11 +208,7 @@ export const ChaletDetailsStep: React.FC<ChaletDetailsStepProps> = ({
                   </FormItem>
                 )}
               />
-            </div>
 
-            
-
-            <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="roomCount"
@@ -138,6 +233,62 @@ export const ChaletDetailsStep: React.FC<ChaletDetailsStepProps> = ({
 
               <FormField
                 control={form.control}
+                name="isEnsuite"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Chalet En-Suite</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        const isEnsuite = value === 'true';
+                        field.onChange(isEnsuite);
+                        // Reset totalWashrooms when switching to ensuite
+                        if (isEnsuite) {
+                          form.setValue('totalWashrooms', 0);
+                        }
+                      }}
+                      value={field.value.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="En-Suite" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="true">True</SelectItem>
+                        <SelectItem value="false">False</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {!form.watch('isEnsuite') && (
+                <FormField
+                  control={form.control}
+                  name="totalWashrooms"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Total Washrooms</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          {...field}
+                          min={0}
+                          onChange={(e) => field.onChange(parseInt(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* Pricing Section */}
+              <FormField
+                control={form.control}
                 name="basePrice"
                 render={({ field }) => (
                   <FormItem>
@@ -158,30 +309,167 @@ export const ChaletDetailsStep: React.FC<ChaletDetailsStepProps> = ({
                 )}
               />
 
-<FormField
-              control={form.control}
-              name="isEnsuite"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Chalet En-Suite</FormLabel>
-                  <Select
-                    onValueChange={(value) => field.onChange(value === 'true')}
-                    value={field.value.toString()}
-                  >
+              <FormField
+                control={form.control}
+                name="weekendPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Weekend Price</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="En-Suite" />
-                      </SelectTrigger>
+                      <Input type="number" 
+                      {...field} 
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        field.onChange(value);
+                      }}
+                      />
                     </FormControl>
-                    <SelectContent>
-                      <SelectItem value="true">True</SelectItem>
-                      <SelectItem value="false">False</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Room Configuration */}
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="totalFloors"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Total Floors</FormLabel>
+                    <FormControl>
+                      <Input type="number" 
+                      {...field} 
+                      min={0} 
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        field.onChange(value);
+                      }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="hasUpstairsLounge"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Upstairs Lounge</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === 'true')}
+                      value={field.value.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Has upstairs lounge?" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="hasDownstairsLounge"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Downstairs Lounge</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === 'true')}
+                      value={field.value.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Has downstairs lounge?" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Capacity Section */}
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="maxAdults"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Maximum Adults</FormLabel>
+                    <FormControl>
+                      <Input type="number" 
+                      {...field} 
+                      min={1}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        field.onChange(value);
+                      }}
+                       />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="maxChildren"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Maximum Children</FormLabel>
+                    <FormControl>
+                      <Input 
+                      type="number" 
+                      {...field} 
+                      min={0} 
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        field.onChange(value);
+                      }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="totalSleeps"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Total Sleeps</FormLabel>
+                    <FormControl>
+                      <Input 
+                      type="number" 
+                      {...field} 
+                      min={1} 
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        field.onChange(value);
+                      }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <FormField

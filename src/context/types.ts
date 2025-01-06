@@ -8,23 +8,48 @@ export interface ChaletImage {
   isMain: boolean;
 }
 
+// Add PropertyType enum to match Prisma
+export enum PropertyType {
+  STANDALONE = "STANDALONE",
+  DUPLEX_UPPER = "DUPLEX_UPPER",
+  DUPLEX_LOWER = "DUPLEX_LOWER"
+}
+
 export interface ChaletDetailsData {
   name: string;
-  type: string;
+  type: PropertyType; // Using the enum from Prisma
   description?: string;
   basePrice: number;
+  weekendPrice?: number;
   isEnsuite: boolean;
   roomCount: number;
+  totalWashrooms: number; // Added when isEnsuite is false
+  totalFloors: number;
+  hasUpstairsLounge: boolean;
+  hasDownstairsLounge: boolean;
+  maxAdults: number;
+  maxChildren: number;
+  totalSleeps: number;
+  ownerId: string;
 }
 
 export interface ChaletImagessData {
   images: ChaletImage[];
 }
 
+export enum RoomType {
+  Double = "Double",
+  Twin = "Twin"
+}
+
 export interface RoomData {
-  roomType: string | undefined;
-  room: number;
+  roomType: RoomType;
+  floor: number;
+  notEnsuite: boolean;
+  hasBunkBed: boolean;
+  bunkBedCapacity?: number;
   capacity: number;
+  numberOfRooms: number; // Number of rooms of this type
 }
 
 export interface AvailabilityData {

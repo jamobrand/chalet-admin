@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Building2, Users, CalendarCheck, CalendarX, BadgeDollarSign } from 'lucide-react';
 import axios from 'axios';
@@ -23,12 +23,12 @@ type DashboardStats = {
     checkIn: string;
     status: string;
   }[];
-}
+};
 
 type ApiResponse = {
   message: string;
   stats: DashboardStats;
-}
+};
 
 const Dashboard = () => {
   const [stats, setStats] = React.useState<DashboardStats | null>(null);
@@ -39,7 +39,9 @@ const Dashboard = () => {
     const fetchDashboardStats = async () => {
       try {
         setLoading(true);
-        const { data } = await axios.get<ApiResponse>(`${API_URL}/v1/dashboard/all-dashboard-stats`);
+        const { data } = await axios.get<ApiResponse>(
+          `${API_URL}/v1/dashboard/all-dashboard-stats`,
+        );
         setStats(data.stats);
         setError(null);
       } catch (err) {
@@ -67,7 +69,7 @@ const Dashboard = () => {
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-3xl font-bold">Dashboard</h1>
-      
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
@@ -116,8 +118,11 @@ const Dashboard = () => {
             <BadgeDollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              Ksh {stats.totalRevenue.toLocaleString()}
+            <div className="text-lg font-bold">
+              Ksh{' '}
+              {Number(stats.totalRevenue)
+                .toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
             </div>
           </CardContent>
         </Card>
@@ -150,21 +155,14 @@ const Dashboard = () => {
         <CardContent>
           <div className="space-y-4">
             {stats.recentBookings.map((booking) => (
-              <div
-                key={booking.id}
-                className="flex items-center justify-between border-b pb-2"
-              >
+              <div key={booking.id} className="flex items-center justify-between border-b pb-2">
                 <div>
                   <p className="font-medium">{booking.chaletName}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {booking.customerName}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{booking.customerName}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium">{booking.checkIn}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {booking.status}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{booking.status}</p>
                 </div>
               </div>
             ))}

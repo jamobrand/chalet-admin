@@ -42,7 +42,10 @@ export const columns: ColumnDef<Transaction>[] = [
     cell: ({ row }) => {
       return (
         <div>
-          <div className="font-medium">{row.original.amount}</div>
+          <div className="font-medium"> {Number(row.original.amount)
+                .toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+          </div>
         </div>
       );
     },
