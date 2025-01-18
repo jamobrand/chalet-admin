@@ -11,6 +11,8 @@ const Chalets = () => {
   const navigate = useNavigate();
   const { data, isLoading, error } = useChalets();
 
+  console.log("Chalets:", data)
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-96">

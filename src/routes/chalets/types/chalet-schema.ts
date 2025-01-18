@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 export const ChaletDetailsSchema = z.object({
   name: z.string().min(2, { message: 'Chalet name must be at least 2 characters' }),
-  type: z.enum(['STANDALONE', 'DUPLEX_UPPER', 'DUPLEX_LOWER']),
+  propertyType: z.enum(['STANDALONE', 'DUPLEX_UPPER', 'DUPLEX_LOWER']),
   description: z.string().optional(),
   basePrice: z.number().min(0, { message: 'Base rate must be non-negative' }),
   weekendPrice: z.number().min(0, { message: 'Weekend rate must be non-negative' }).optional(),

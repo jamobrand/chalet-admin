@@ -17,7 +17,7 @@ export enum PropertyType {
 
 export interface ChaletDetailsData {
   name: string;
-  type: PropertyType; // Using the enum from Prisma
+  propertyType: PropertyType; // Using the enum from Prisma
   description?: string;
   basePrice: number;
   weekendPrice?: number;

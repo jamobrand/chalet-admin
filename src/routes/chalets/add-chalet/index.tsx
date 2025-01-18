@@ -43,7 +43,7 @@ const AddChalet: React.FC = () => {
       toast({
         variant: 'success',
         title: 'Chalet created successfully',
-        description: `${response.data.message}`,
+        description: `${response?.data?.message}`,
       });
 
       // Reset form and navigate only after a successful response

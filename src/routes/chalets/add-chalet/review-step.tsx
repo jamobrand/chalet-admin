@@ -17,7 +17,7 @@ interface ChaletImage {
 // Define precise interfaces based on your data structure
 interface ChaletDetails {
   name: string;
-  type: string;
+  propertyType: string;
   description?: string;
   basePrice: number;
   isEnsuite: boolean;
@@ -120,7 +120,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                   <strong>Name:</strong> {data.name}
                 </p>
                 <p>
-                  <strong>Type:</strong> {data.type}
+                  <strong>Type:</strong> {data.propertyType}
                 </p>
                 <p>
                   <strong>En-suite:</strong> {data.isEnsuite ? 'Yes' : 'No'}

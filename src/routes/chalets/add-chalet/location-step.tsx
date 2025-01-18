@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChevronLeft, ChevronRight, MapPin, Locate } from 'lucide-react';
@@ -36,13 +36,14 @@ interface NominatimPlace {
     country_code?: string;
   };
 }
-
 interface LocationStepProps {
   setCurrentStep: React.Dispatch<React.SetStateAction<number>>;
 }
 
 export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep }) => {
   const { updateChaletData, chaletData } = useChaletContext();
+  const mapRef = useRef<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(
@@ -50,9 +51,8 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep }) =>
   );
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
-  const [map, setMap] = useState<L.Map | null>(null);
-  const [marker, setMarker] = useState<L.Marker | null>(null);
 
   const form = useForm<LocationFormData>({
     resolver: zodResolver(LocationSchema),
@@ -68,112 +68,79 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep }) =>
     },
   });
 
-
-  // Initialize map when component mounts
+  // Initialize map when selectedLocation changes
   useEffect(() => {
-    if (!map && selectedLocation) {
-      const mapInstance = L.map('location-map').setView(
+    if (selectedLocation && mapContainerRef.current) {
+      // Cleanup previous map instance
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+
+      // Create new map instance
+      const map = L.map(mapContainerRef.current).setView(
         [selectedLocation.coordinates.lat, selectedLocation.coordinates.lng],
-        15
+        15,
       );
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(mapInstance);
+        attribution: '© OpenStreetMap contributors',
+      }).addTo(map);
 
-      const markerInstance = L.marker([
-        selectedLocation.coordinates.lat,
-        selectedLocation.coordinates.lng
-      ]).addTo(mapInstance);
+      L.marker([selectedLocation.coordinates.lat, selectedLocation.coordinates.lng]).addTo(map);
 
-      setMap(mapInstance);
-      setMarker(markerInstance);
+      mapRef.current = map;
 
-      return () => {
-        mapInstance.remove();
-      };
+      // Trigger a resize event after the map is initialized
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 100);
     }
-  }, [map, selectedLocation]);
 
-    // Update marker position when location changes
-    useEffect(() => {
-      if (map && marker && selectedLocation) {
-        const newLatLng = [
-          selectedLocation.coordinates.lat,
-          selectedLocation.coordinates.lng
-        ] as L.LatLngExpression;
-        
-        marker.setLatLng(newLatLng);
-        map.setView(newLatLng, 15);
+    // Cleanup function
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
       }
-    }, [map, marker, selectedLocation]);
+    };
+  }, [selectedLocation]);
 
-  // Render map for selected location
-  // const renderMap = () => {
-  //   const location = form.getValues('location');
-  //   if (!location.coordinates.lat || !mapLoaded) return null;
+  // Search locations using OpenStreetMap Nominatim API
+  const searchLocations = useCallback(async (query: string) => {
+    if (!query) return;
 
-  //   return (
-  //     <div className="w-full h-[400px] mt-4">
-  //       <div
-  //         id="location-map"
-  //         className="w-full h-full rounded-lg"
-  //         ref={(el) => {
-  //           if (el && window.google) {
-  //             const map = new window.google.maps.Map(el, {
-  //               center: location.coordinates,
-  //               zoom: 15,
-  //             });
+    setIsLoading(true);
+    setError(null);
 
-  //             new window.google.maps.Marker({
-  //               position: location.coordinates,
-  //               map: map,
-  //               title: location.name,
-  //             });
-  //           }
-  //         }}
-  //       />
-  //     </div>
-  //   );
-  // };
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`,
+      );
 
-  // Search locations using Google Places API
- // Search locations using OpenStreetMap Nominatim API
- const searchLocations = useCallback(async (query: string) => {
-  if (!query) return;
+      if (!response.ok) {
+        throw new Error('Failed to fetch locations');
+      }
 
-  setIsLoading(true);
-  setError(null);
+      const data: NominatimPlace[] = await response.json();
 
-  try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`
-    );
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch locations');
+      const mappedLocations: LocationData[] = data.map((place: NominatimPlace) => ({
+        id: place.place_id.toString(),
+        name: place.display_name.split(',')[0],
+        address: place.display_name,
+        coordinates: {
+          lat: parseFloat(place.lat),
+          lng: parseFloat(place.lon),
+        },
+      }));
+
+      setLocations(mappedLocations);
+      setIsLoading(false);
+    } catch (error) {
+      setError(`Error searching locations: ${error}`);
+      setIsLoading(false);
     }
-
-    const data = await response.json();
-    
-    const mappedLocations: LocationData[] = data.map((place: NominatimPlace) => ({
-      id: place.place_id.toString(),
-      name: place.display_name.split(',')[0],
-      address: place.display_name,
-      coordinates: {
-        lat: parseFloat(place.lat),
-        lng: parseFloat(place.lon),
-      },
-    }));
-
-    setLocations(mappedLocations);
-    setIsLoading(false);
-  } catch (error) {
-    setError(`Error searching locations: ${error}`);
-    setIsLoading(false);
-  }
-}, []);
-
+  }, []);
 
   // Geolocation handler// Get current location
   const getCurrentLocation = () => {
@@ -185,15 +152,15 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep }) =>
         async (position) => {
           try {
             const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
             );
-            
+
             if (!response.ok) {
               throw new Error('Failed to fetch location details');
             }
 
             const data = await response.json();
-            
+
             const nearbyLocation: LocationData = {
               id: data.place_id.toString(),
               name: data.display_name.split(',')[0],
@@ -214,7 +181,7 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep }) =>
         (error) => {
           setError('Geolocation error: ' + error.message);
           setIsLoading(false);
-        }
+        },
       );
     } else {
       setError('Geolocation not supported');
@@ -326,7 +293,7 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep }) =>
                   )}
                 />
 
-                <div id="location-map" className="w-full h-[400px] rounded-lg" />
+                <div ref={mapContainerRef} className="w-full h-[400px] rounded-lg" />
               </div>
             )}
 
@@ -340,10 +307,9 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep }) =>
                     variant="secondary"
                     onClick={() => {
                       setSelectedLocation(null);
-                      if (map) {
-                        map.remove();
-                        setMap(null);
-                        setMarker(null);
+                      if (mapRef.current) {
+                        mapRef.current.remove();
+                        mapRef.current = null;
                       }
                     }}
                     type="button"

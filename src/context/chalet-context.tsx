@@ -5,7 +5,7 @@ import { PropertyType } from './types';
 export const initialChaletData: Partial<ChaletListingData> = {
   chaletDetails: {
     name: '',
-    type: PropertyType.STANDALONE,  // Set a default enum value instead of empty string
+    propertyType: PropertyType.STANDALONE,  // Set a default enum value instead of empty string
     isEnsuite: false,
     basePrice: 0,
     roomCount: 1,

@@ -47,7 +47,7 @@ export const ChaletDetailsStep: React.FC<ChaletDetailsStepProps> = ({
     resolver: zodResolver(ChaletDetailsSchema),
     defaultValues: {
       name: chaletData.chaletDetails?.name || '',
-      type: chaletData.chaletDetails?.type || PropertyType.STANDALONE,
+      propertyType: chaletData.chaletDetails?.propertyType || PropertyType.STANDALONE,
       description: chaletData.chaletDetails?.description || '',
       basePrice: chaletData.chaletDetails?.basePrice || 0,
       weekendPrice: chaletData.chaletDetails?.weekendPrice || 0,
@@ -186,7 +186,7 @@ export const ChaletDetailsStep: React.FC<ChaletDetailsStepProps> = ({
 
               <FormField
                 control={form.control}
-                name="type"
+                name="propertyType"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Chalet Type</FormLabel>
