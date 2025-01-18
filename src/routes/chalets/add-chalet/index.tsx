@@ -6,7 +6,7 @@ import { RoomDetailsStep } from './room-detail';
 import { ChaletAvailabilityStep } from './chalet-availability-step';
 import { LocationStep } from './location-step';
 import { AmenitiesStep } from './amenities';
-import { API_URL, GOOGLE_API_KEY } from '@/config';
+import { API_URL } from '@/config';
 import { ReviewStep } from './review-step';
 import { ChaletImagesStep } from './chalet-images';
 import axios, { AxiosError } from 'axios';
@@ -102,7 +102,7 @@ const AddChalet: React.FC = () => {
       2: () => <RoomDetailsStep setCurrentStep={setCurrentStep} totalRooms={totalRooms} />,
       3: () => <ChaletImagesStep setCurrentStep={setCurrentStep} />,
       4: () => <ChaletAvailabilityStep setCurrentStep={setCurrentStep} />,
-      5: () => <LocationStep setCurrentStep={setCurrentStep} googleMapsApiKey={GOOGLE_API_KEY} />,
+      5: () => <LocationStep setCurrentStep={setCurrentStep} />,
       6: () => <AmenitiesStep setCurrentStep={setCurrentStep} />,
       7: () => (
         <ReviewStep

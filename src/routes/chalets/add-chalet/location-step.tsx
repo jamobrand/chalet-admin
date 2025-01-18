@@ -8,36 +8,40 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { LocationFormData, LocationSchema } from '../types/chalet-schema';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-// Declare Google global types
-declare global {
-  interface Window {
-    google: {
-      maps: {
-        places: {
-          PlacesService: new (div: HTMLDivElement) => google.maps.places.PlacesService;
-          PlacesServiceStatus: {
-            OK: string;
-          };
-          PlaceSearchRequest: {
-            location?: google.maps.LatLng | google.maps.LatLngLiteral;
-            radius?: number;
-            type?: string[];
-          };
-        };
-        Map: new (element: HTMLElement, options: google.maps.MapOptions) => google.maps.Map;
-        Marker: new (options: google.maps.MarkerOptions) => google.maps.Marker;
-        LatLng: new (lat: number, lng: number) => google.maps.LatLng;
-      };
-    };
-  }
+// Nominatim API response type
+interface NominatimPlace {
+  place_id: number;
+  licence: string;
+  osm_type: string;
+  osm_id: number;
+  boundingbox: string[];
+  lat: string;
+  lon: string;
+  display_name: string;
+  class: string;
+  type: string;
+  importance: number;
+  icon?: string;
+  address?: {
+    house_number?: string;
+    road?: string;
+    suburb?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+    country_code?: string;
+  };
 }
+
 interface LocationStepProps {
   setCurrentStep: React.Dispatch<React.SetStateAction<number>>;
-  googleMapsApiKey: string;
 }
 
-export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, googleMapsApiKey }) => {
+export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep }) => {
   const { updateChaletData, chaletData } = useChaletContext();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,16 +51,12 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const [map, setMap] = useState<L.Map | null>(null);
+  const [marker, setMarker] = useState<L.Marker | null>(null);
 
   const form = useForm<LocationFormData>({
     resolver: zodResolver(LocationSchema),
     defaultValues: {
-      // location: chaletData.location || {
-      //   name: "",
-      //   address: "",
-      //   coordinates: { lat: 0, lng: 0 }
-      // }
       location: {
         name: chaletData.location?.name || '',
         address: chaletData?.location?.address || '',
@@ -68,149 +68,153 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
     },
   });
 
-  // Load Google Maps script
+
+  // Initialize map when component mounts
   useEffect(() => {
-    const loadGoogleMapsScript = () => {
-      if (!window.google) {
-        const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`;
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-        script.onload = () => {
-          console.log('Google Maps script loaded');
-          setMapLoaded(true); // Set mapLoaded to true when the script is loaded
-        };
-      } else {
-        setMapLoaded(true); // If Google Maps is already loaded
+    if (!map && selectedLocation) {
+      const mapInstance = L.map('location-map').setView(
+        [selectedLocation.coordinates.lat, selectedLocation.coordinates.lng],
+        15
+      );
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(mapInstance);
+
+      const markerInstance = L.marker([
+        selectedLocation.coordinates.lat,
+        selectedLocation.coordinates.lng
+      ]).addTo(mapInstance);
+
+      setMap(mapInstance);
+      setMarker(markerInstance);
+
+      return () => {
+        mapInstance.remove();
+      };
+    }
+  }, [map, selectedLocation]);
+
+    // Update marker position when location changes
+    useEffect(() => {
+      if (map && marker && selectedLocation) {
+        const newLatLng = [
+          selectedLocation.coordinates.lat,
+          selectedLocation.coordinates.lng
+        ] as L.LatLngExpression;
+        
+        marker.setLatLng(newLatLng);
+        map.setView(newLatLng, 15);
       }
-    };
-    loadGoogleMapsScript();
-  }, [googleMapsApiKey]);
+    }, [map, marker, selectedLocation]);
 
   // Render map for selected location
-  const renderMap = () => {
-    const location = form.getValues('location');
-    if (!location.coordinates.lat || !mapLoaded) return null;
+  // const renderMap = () => {
+  //   const location = form.getValues('location');
+  //   if (!location.coordinates.lat || !mapLoaded) return null;
 
-    return (
-      <div className="w-full h-[400px] mt-4">
-        <div
-          id="location-map"
-          className="w-full h-full rounded-lg"
-          ref={(el) => {
-            if (el && window.google) {
-              const map = new window.google.maps.Map(el, {
-                center: location.coordinates,
-                zoom: 15,
-              });
+  //   return (
+  //     <div className="w-full h-[400px] mt-4">
+  //       <div
+  //         id="location-map"
+  //         className="w-full h-full rounded-lg"
+  //         ref={(el) => {
+  //           if (el && window.google) {
+  //             const map = new window.google.maps.Map(el, {
+  //               center: location.coordinates,
+  //               zoom: 15,
+  //             });
 
-              new window.google.maps.Marker({
-                position: location.coordinates,
-                map: map,
-                title: location.name,
-              });
-            }
-          }}
-        />
-      </div>
-    );
-  };
+  //             new window.google.maps.Marker({
+  //               position: location.coordinates,
+  //               map: map,
+  //               title: location.name,
+  //             });
+  //           }
+  //         }}
+  //       />
+  //     </div>
+  //   );
+  // };
 
   // Search locations using Google Places API
-  const searchLocations = useCallback(async (query: string) => {
-    if (!window.google?.maps?.places || !query) return;
+ // Search locations using OpenStreetMap Nominatim API
+ const searchLocations = useCallback(async (query: string) => {
+  if (!query) return;
 
-    setIsLoading(true);
-    setError(null);
+  setIsLoading(true);
+  setError(null);
 
-    try {
-      const service = new window.google.maps.places.PlacesService(document.createElement('div'));
-
-      service.textSearch(
-        { query },
-        (
-          results: google.maps.places.PlaceResult[] | null,
-          status: google.maps.places.PlacesServiceStatus,
-        ) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            const mappedLocations: LocationData[] = results
-              .filter((place): place is google.maps.places.PlaceResult => !!place.place_id)
-              .map((place) => ({
-                id: place.place_id || '',
-                name: place.name || '',
-                address: place.formatted_address || place.vicinity || '',
-                coordinates: {
-                  lat: place.geometry?.location?.lat() || 0,
-                  lng: place.geometry?.location?.lng() || 0,
-                },
-              }));
-
-            setLocations(mappedLocations);
-          } else {
-            setError('No locations found or search failed');
-          }
-          setIsLoading(false);
-        },
-      );
-    } catch (error) {
-      setError(`Error searching locations:, ${error}`);
-      setIsLoading(false);
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch locations');
     }
-  }, []);
 
-  // Geolocation handler
+    const data = await response.json();
+    
+    const mappedLocations: LocationData[] = data.map((place: NominatimPlace) => ({
+      id: place.place_id.toString(),
+      name: place.display_name.split(',')[0],
+      address: place.display_name,
+      coordinates: {
+        lat: parseFloat(place.lat),
+        lng: parseFloat(place.lon),
+      },
+    }));
+
+    setLocations(mappedLocations);
+    setIsLoading(false);
+  } catch (error) {
+    setError(`Error searching locations: ${error}`);
+    setIsLoading(false);
+  }
+}, []);
+
+
+  // Geolocation handler// Get current location
   const getCurrentLocation = () => {
     setIsLoading(true);
     setError(null);
 
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const service = new window.google.maps.places.PlacesService(
-            document.createElement('div'),
-          );
+        async (position) => {
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`
+            );
+            
+            if (!response.ok) {
+              throw new Error('Failed to fetch location details');
+            }
 
-          const location = new window.google.maps.LatLng(
-            position.coords.latitude,
-            position.coords.longitude,
-          );
+            const data = await response.json();
+            
+            const nearbyLocation: LocationData = {
+              id: data.place_id.toString(),
+              name: data.display_name.split(',')[0],
+              address: data.display_name,
+              coordinates: {
+                lat: parseFloat(data.lat),
+                lng: parseFloat(data.lon),
+              },
+            };
 
-          service.nearbySearch(
-            {
-              location,
-              radius: 5000,
-              type: ['lodging', 'hotel'].join('|'), // Corrected type to string array
-            },
-            (
-              results: google.maps.places.PlaceResult[] | null,
-              status: google.maps.places.PlacesServiceStatus,
-            ) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-                const nearbyLocations: LocationData[] = results
-                  .filter((place): place is google.maps.places.PlaceResult => !!place.place_id)
-                  .map((place) => ({
-                    id: place.place_id || '',
-                    name: place.name || '',
-                    address: place.vicinity || place.formatted_address || '',
-                    coordinates: {
-                      lat: place.geometry?.location?.lat() || 0,
-                      lng: place.geometry?.location?.lng() || 0,
-                    },
-                  }));
-
-                setLocations(nearbyLocations);
-              } else {
-                setError('No nearby locations found');
-              }
-              setIsLoading(false);
-            },
-          );
+            setLocations([nearbyLocation]);
+            setIsLoading(false);
+          } catch (error) {
+            setError(`Error getting location details: ${error}`);
+            setIsLoading(false);
+          }
         },
         (error) => {
           setError('Geolocation error: ' + error.message);
           setIsLoading(false);
-        },
+        }
       );
     } else {
       setError('Geolocation not supported');
@@ -220,9 +224,13 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
 
   // Search on term change
   useEffect(() => {
-    if (searchTerm.length > 2 && window.google) {
-      searchLocations(searchTerm);
-    }
+    const delayDebounceFn = setTimeout(() => {
+      if (searchTerm.length > 2) {
+        searchLocations(searchTerm);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, searchLocations]);
 
   const handleLocationSelect = (location: LocationData) => {
@@ -248,7 +256,6 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             {!selectedLocation ? (
-              // Location search view
               <>
                 <div className="flex items-center mb-4 space-x-2">
                   <input
@@ -256,12 +263,7 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="flex-grow p-2 border rounded"
-                    disabled={!mapLoaded}
                   />
-                  {!mapLoaded && (
-                    <p className="text-sm text-muted-foreground">Loading Google Maps...</p>
-                  )}
-
                   <Button
                     variant="outline"
                     size="icon"
@@ -281,7 +283,7 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
                   <div className="grid gap-4">
                     {locations.map((location) => (
                       <div
-                        key={location?.id}
+                        key={location.id}
                         className="border p-4 rounded-lg cursor-pointer hover:bg-secondary/20"
                         onClick={() => handleLocationSelect(location)}
                       >
@@ -298,7 +300,6 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
                 )}
               </>
             ) : (
-              // Selected location view
               <div className="space-y-4">
                 <FormField
                   control={form.control}
@@ -325,7 +326,7 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
                   )}
                 />
 
-                {renderMap()}
+                <div id="location-map" className="w-full h-[400px] rounded-lg" />
               </div>
             )}
 
@@ -337,7 +338,14 @@ export const LocationStep: React.FC<LocationStepProps> = ({ setCurrentStep, goog
                 <>
                   <Button
                     variant="secondary"
-                    onClick={() => setSelectedLocation(null)}
+                    onClick={() => {
+                      setSelectedLocation(null);
+                      if (map) {
+                        map.remove();
+                        setMap(null);
+                        setMarker(null);
+                      }
+                    }}
                     type="button"
                   >
                     Change Location
