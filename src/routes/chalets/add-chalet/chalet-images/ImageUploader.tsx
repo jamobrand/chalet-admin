@@ -34,7 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import axios from 'axios';
+
 
 interface ImageUploaderProps {
   images: ChaletImage[];
