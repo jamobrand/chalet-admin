@@ -34,6 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import axios from 'axios';
 
 interface ImageUploaderProps {
   images: ChaletImage[];
@@ -267,8 +268,15 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
         const response = await fetch(`${API_URL}/v1/images/upload`, {
           method: 'POST',
+          headers: { 'Content-Type': 'multipart/form-data' },
           body: formData,
         });
+
+        //   const response = await axios.post(`${API_URL}/v1/images/upload`, formData, {
+        //   headers: {
+        //     'Content-Type': 'multipart/form-data',
+        //   },
+        // });
 
         if (!response.ok) {
           const errorData = await response.json();
