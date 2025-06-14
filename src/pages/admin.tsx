@@ -1,6 +1,7 @@
 import MainLayout from '@/components/common';
 import Addons from '@/routes/addons';
 import AddAddon from '@/routes/addons/add-addon';
+import EditAddonPage from '@/routes/addons/edit-addon';
 import Chalets from '@/routes/chalets';
 import AddChalet from '@/routes/chalets/add-chalet';
 import EditChaletPage from '@/routes/chalets/edit-chalet';
@@ -43,6 +44,8 @@ const Admin = () => {
         <Route path="rules/add-rule" element={<AddRule />} />
         <Route path="addons" element={<Addons />} />
         <Route path="addons/add-addon" element={<AddAddon />} />
+        <Route path="addons/view-addon/:id" element={<EditAddonPage />} />
+        
       </Routes>
     </MainLayout>
   );

@@ -1,6 +1,6 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { AddOn } from "./types";
-//import { AddonActions } from "./addon-action";
+import { AddonActions } from "./addon-action";
 
 export const columns: ColumnDef<AddOn>[] = [
   {
@@ -25,8 +25,8 @@ export const columns: ColumnDef<AddOn>[] = [
       );
     },
   },
-  // {
-  //   id: 'actions',
-  //   cell: ({ row }) => <AddonActions addon={row.original} />,
-  // },
+  {
+    id: 'actions',
+    cell: ({ row }) => <AddonActions addon={row.original} />,
+  },
 ];

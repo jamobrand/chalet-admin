@@ -65,7 +65,7 @@ export const AmenitiesSchema = z.object({
 export type AmenitiesFormData = z.infer<typeof AmenitiesSchema>;
 
 export const ChaletImageSchema = z.object({
-  file: z.instanceof(File).nullable(),
+file: z.instanceof(File).nullable().optional(), // Make it optional
   url: z.string(),
   alt: z.string(),
   key: z.string().optional(),

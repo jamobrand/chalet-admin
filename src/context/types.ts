@@ -1,6 +1,6 @@
 // Enhanced type to include label and isMain flag
 export interface ChaletImage {
-  file: File | null;
+ file?: File | null; // Make optional
   url: string;
   alt: string;
   key?: string;
