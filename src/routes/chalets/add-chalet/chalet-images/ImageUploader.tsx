@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ImagePlus,
   X,
@@ -8,6 +8,9 @@ import {
   Check,
   AlertCircle,
   Upload,
+  WifiOff,
+  RefreshCw,
+  Wifi,
 } from 'lucide-react';
 import { API_URL } from '@/config';
 import { ChaletImage } from '@/context/types';
@@ -35,7 +38,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 
-
 interface ImageUploaderProps {
   images: ChaletImage[];
   onImagesChange: (images: ChaletImage[]) => void;
@@ -47,29 +49,56 @@ interface UploadProgress {
   total: number;
   uploaded: number;
   currentFile?: string;
+  percentage?: number;
+  transferredBytes?: number;
+  totalBytes?: number;
 }
 
-// Constants
-const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const DEFAULT_MAX_IMAGES = 10;
+interface NetworkStatus {
+  online: boolean;
+  connectionType?: string;
+}
 
-// Utility functions
+interface FailedUpload {
+  file: File;
+  error: string;
+  retryCount: number;
+}
+
+// Enhanced constants
+const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // Increased to 25MB to match backend
+const DEFAULT_MAX_IMAGES = 15; // Increased to match backend
+//const CHUNK_SIZE = 1024 * 1024; // 1MB chunks for progress tracking
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY = 2000; // 2 seconds
+
+// Enhanced utility functions
 const validateFile = (file: File): string | null => {
   if (!ALLOWED_FILE_TYPES.includes(file.type)) {
     return `File type ${file.type} is not allowed. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}`;
   }
-
   if (file.size > MAX_FILE_SIZE) {
     return `File size exceeds maximum limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
   }
-
+  if (file.size === 0) {
+    return 'File appears to be empty';
+  }
   return null;
 };
 
-// const formatFileSize = (bytes: number): string => {
-//   return (bytes / (1024 * 1024)).toFixed(2) + 'MB';
-// };
+const formatFileSize = (bytes: number): string => {
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  if (bytes === 0) return '0 Bytes';
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
+};
+
+const validateTotalUploadSize = (files: File[]): boolean => {
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  const maxTotalSize = 200 * 1024 * 1024; // 200MB total
+  return totalSize <= maxTotalSize;
+};
 
 // Sortable Image Component
 const SortableImage = React.memo(
@@ -201,12 +230,43 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const [editingImage, setEditingImage] = useState<ChaletImage | null>(null);
   const [customLabel, setCustomLabel] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({ online: true });
+  const [failedUploads, setFailedUploads] = useState<FailedUpload[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+    const updateNetworkStatus = () => {
+      setNetworkStatus({
+        online: navigator.onLine,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        connectionType: (navigator as any).connection?.effectiveType || 'unknown',
+      });
+    };
+
+    window.addEventListener('online', updateNetworkStatus);
+    window.addEventListener('offline', updateNetworkStatus);
+
+    // Initial check
+    updateNetworkStatus();
+
+    return () => {
+      window.removeEventListener('online', updateNetworkStatus);
+      window.removeEventListener('offline', updateNetworkStatus);
+    };
+  }, []);
 
   const validateFiles = useCallback((files: FileList): { valid: File[]; errors: string[] } => {
     const valid: File[] = [];
     const errors: string[] = [];
+    const fileArray = Array.from(files);
 
-    Array.from(files).forEach((file) => {
+    // Validate total upload size first
+    if (!validateTotalUploadSize(fileArray)) {
+      errors.push('Total upload size exceeds 250MB limit');
+      return { valid, errors };
+    }
+
+    fileArray.forEach((file) => {
       const error = validateFile(file);
       if (error) {
         errors.push(`${file.name}: ${error}`);
@@ -218,12 +278,53 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     return { valid, errors };
   }, []);
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const uploadWithRetry = async (formData: FormData, retryCount: number = 0): Promise<Response> => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+      const response = await fetch(`${API_URL}/v1/images/upload`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return response;
+    } catch (error) {
+      if (retryCount < MAX_RETRY_ATTEMPTS) {
+        console.log(`Upload attempt ${retryCount + 1} failed, retrying...`);
+        await sleep(RETRY_DELAY * (retryCount + 1)); // Exponential backoff
+        return uploadWithRetry(formData, retryCount + 1);
+      }
+      throw error;
+    }
+  };
+
   const handleImageUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
       if (!files || files.length === 0) return;
 
       setValidationErrors([]);
+      setFailedUploads([]);
+
+      // Check network status
+      if (!networkStatus.online) {
+        toast({
+          variant: 'destructive',
+          title: 'No internet connection',
+          description: 'Please check your connection and try again.',
+        });
+        return;
+      }
 
       // Check total image limit
       const remainingSlots = maxImages - images.length;
@@ -254,10 +355,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       }
 
       setIsUploading(true);
+      const totalBytes = filesToUpload.reduce((sum, file) => sum + file.size, 0);
       setUploadProgress({
         total: filesToUpload.length,
         uploaded: 0,
         currentFile: filesToUpload[0]?.name,
+        percentage: 0,
+        transferredBytes: 0,
+        totalBytes,
       });
 
       try {
@@ -266,18 +371,10 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           formData.append('images', file);
         });
 
-        const response = await fetch(`${API_URL}/v1/images/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Upload failed');
-        }
-
+        const response = await uploadWithRetry(formData);
         const result = await response.json();
-        console.log('result:', result);
+
+        console.log('Upload result:', result);
         const uploadedImages = result.data.images;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -290,17 +387,27 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         }));
 
         const updatedImages = [...images, ...newImages];
-        console.log('updatedImages:', updatedImages);
         onImagesChange(updatedImages);
 
         // Show success with compression stats
         const stats = result.data.stats;
         toast({
           title: 'Images uploaded successfully',
-          description: `${newImages.length} image(s) uploaded. Space saved: ${stats?.spaceSaved || 'N/A'}`,
+          description: `${newImages.length} image(s) uploaded. ${
+            stats?.spaceSaved ? `Space saved: ${stats.spaceSaved}` : ''
+          }`,
         });
       } catch (error) {
         console.error('Image upload error:', error);
+
+        // Add to failed uploads for retry
+        const failed: FailedUpload[] = filesToUpload.map((file) => ({
+          file,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          retryCount: 0,
+        }));
+        setFailedUploads(failed);
+
         toast({
           variant: 'destructive',
           title: 'Upload failed',
@@ -316,8 +423,33 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         }
       }
     },
-    [images, maxImages, onImagesChange, toast, validateFiles],
+    [images, maxImages, onImagesChange, toast, validateFiles, networkStatus.online],
   );
+
+  const retryFailedUploads = useCallback(async () => {
+    if (failedUploads.length === 0) return;
+
+    const filesToRetry = failedUploads.filter((f) => f.retryCount < MAX_RETRY_ATTEMPTS);
+    if (filesToRetry.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Maximum retry attempts reached',
+        description: 'Unable to upload some files after multiple attempts.',
+      });
+      return;
+    }
+
+    // Create fake event to reuse upload logic
+    const fakeEvent = {
+      target: { files: filesToRetry.map((f) => f.file) },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+
+    // Update retry count
+    setFailedUploads((prev) => prev.map((f) => ({ ...f, retryCount: f.retryCount + 1 })));
+
+    await handleImageUpload(fakeEvent);
+  }, [failedUploads, handleImageUpload, toast]);
 
   const removeImage = useCallback(
     async (indexToRemove: number) => {
@@ -424,12 +556,23 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set drag over to false if we're leaving the main container
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
+    }
   }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      setIsDragOver(false);
 
       if (disabled || isUploading) return;
 
@@ -460,6 +603,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         disabled={isUploading || disabled || remainingSlots <= 0}
       />
 
+      {/* Network Status Indicator */}
+      {!networkStatus.online && (
+        <Alert className="border-red-200 bg-red-50">
+          <WifiOff className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            No internet connection. Please check your connection to upload images.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
         <Alert className="border-red-200 bg-red-50">
@@ -478,6 +631,40 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         </Alert>
       )}
 
+      {/* Failed Uploads */}
+      {failedUploads.length > 0 && (
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <AlertCircle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium mb-1">
+                  {failedUploads.length} file(s) failed to upload
+                </div>
+                <ul className="text-sm space-y-1">
+                  {failedUploads.slice(0, 3).map((failed, index) => (
+                    <li key={index}>
+                      {failed.file.name}: {failed.error}
+                    </li>
+                  ))}
+                  {failedUploads.length > 3 && <li>... and {failedUploads.length - 3} more</li>}
+                </ul>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={retryFailedUploads}
+                disabled={isUploading}
+                className="ml-4"
+              >
+                <RefreshCw size={14} className="mr-1" />
+                Retry
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Upload Progress */}
       {uploadProgress && (
         <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -486,6 +673,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             <span className="text-sm font-medium text-blue-800">
               Uploading {uploadProgress.uploaded + 1} of {uploadProgress.total}
             </span>
+            <div className="flex items-center gap-1 ml-auto">
+              {networkStatus.online ? (
+                <Wifi className="text-green-600" size={14} />
+              ) : (
+                <WifiOff className="text-red-600" size={14} />
+              )}
+              <span className="text-xs text-gray-600">{networkStatus.connectionType}</span>
+            </div>
           </div>
           <Progress
             value={(uploadProgress.uploaded / uploadProgress.total) * 100}
@@ -494,13 +689,22 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           {uploadProgress.currentFile && (
             <p className="text-xs text-blue-600">Processing: {uploadProgress.currentFile}</p>
           )}
+          {uploadProgress.transferredBytes && uploadProgress.totalBytes && (
+            <p className="text-xs text-blue-600">
+              {formatFileSize(uploadProgress.transferredBytes)} of{' '}
+              {formatFileSize(uploadProgress.totalBytes)}
+            </p>
+          )}
         </div>
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 transition-all duration-200 ${
+            isDragOver ? 'bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg p-4' : ''
+          }`}
           onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
           <SortableContext
@@ -527,15 +731,17 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             <button
               type="button"
               onClick={triggerFileInput}
-              disabled={isUploading || disabled}
+              disabled={isUploading || disabled || !networkStatus.online}
               className={`h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center 
                        transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500
                        ${
-                         disabled
+                         disabled || !networkStatus.online
                            ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
                            : isUploading
                              ? 'border-blue-300 bg-blue-50 cursor-wait'
-                             : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50 cursor-pointer'
+                             : isDragOver
+                               ? 'border-blue-500 bg-blue-100'
+                               : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50 cursor-pointer'
                        }`}
               aria-label="Upload images"
             >
@@ -543,6 +749,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                 <>
                   <Loader2 className="animate-spin text-blue-500" size={32} />
                   <span className="text-sm text-blue-600 mt-2">Processing...</span>
+                </>
+              ) : !networkStatus.online ? (
+                <>
+                  <WifiOff className="text-gray-400" size={32} />
+                  <span className="text-sm text-gray-500 mt-2">No Connection</span>
                 </>
               ) : (
                 <>
@@ -603,7 +814,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         </div>
       )}
 
-      {/* Helper Text */}
+      {/* Enhanced Helper Text */}
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>
           {images.length === 0
@@ -612,7 +823,20 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               ? `${remainingSlots} more image${remainingSlots !== 1 ? 's' : ''} can be added`
               : `Maximum ${maxImages} images reached`}
         </span>
-        <span>Max size: {MAX_FILE_SIZE / (1024 * 1024)}MB per image</span>
+        <div className="flex items-center gap-4">
+          <span>Max size: {MAX_FILE_SIZE / (1024 * 1024)}MB per image</span>
+          <span>Total limit: 200MB</span>
+          <div className="flex items-center gap-1">
+            {networkStatus.online ? (
+              <Wifi className="text-green-500" size={12} />
+            ) : (
+              <WifiOff className="text-red-500" size={12} />
+            )}
+            <span className={networkStatus.online ? 'text-green-600' : 'text-red-600'}>
+              {networkStatus.online ? 'Online' : 'Offline'}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
