@@ -445,7 +445,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         const progressInterval = setInterval(() => {
           setUploadProgress((prev) => {
             if (!prev) return null;
-            const elapsed = Date.now() - uploadStartTime;
+            // const elapsed = Date.now() - uploadStartTime;
             // const estimatedTotal = (elapsed / Math.max(prev.percentage || 1, 1)) * 100;
             // Note: 'remaining' calculation is for future enhancement potential
             // const remaining = Math.max(0, estimatedTotal - elapsed);
@@ -527,15 +527,19 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             errorTitle = 'Server error';
             errorMessage = 'There was a server error. Please try again in a few moments.';
           } else if (error.message.includes('network') || error.message.includes('fetch')) {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             errorTitle = 'Network error';
             errorMessage =
               'Network connection failed. Please check your internet connection and try again.';
           } else {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             errorMessage = error.message;
           }
         }
+
+        toast({
+          variant: 'destructive',
+          title: errorTitle,
+          description: errorMessage,
+        });
 
         // Add to failed uploads for retry
         const failed: FailedUpload[] = filesToUpload.map((file) => ({
