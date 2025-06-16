@@ -96,7 +96,7 @@ const formatFileSize = (bytes: number): string => {
 
 const validateTotalUploadSize = (files: File[]): boolean => {
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-  const maxTotalSize = 200 * 1024 * 1024; // 200MB total
+  const maxTotalSize = 250 * 1024 * 1024; // 200MB total
   return totalSize <= maxTotalSize;
 };
 
@@ -283,27 +283,77 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const uploadWithRetry = async (formData: FormData, retryCount: number = 0): Promise<Response> => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+      // Increase timeout significantly for production
+      const timeout = 300000; // 5 minutes total timeout
+      const timeoutId = setTimeout(() => {
+        console.log(`Upload timeout after ${timeout}ms, attempt ${retryCount + 1}`);
+        controller.abort();
+      }, timeout);
+
+      // Add progress tracking for better UX
+      const startTime = Date.now();
 
       const response = await fetch(`${API_URL}/v1/images/upload`, {
         method: 'POST',
         body: formData,
         signal: controller.signal,
+        // Add headers for better handling
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+        },
       });
 
       clearTimeout(timeoutId);
+      const requestTime = Date.now() - startTime;
+      console.log(`Upload request completed in ${requestTime}ms, status: ${response.status}`);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.log(`HTTP Error ${response.status}:`, errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
 
       return response;
     } catch (error) {
+      const isTimeout =
+        error instanceof Error &&
+        (error.name === 'AbortError' || error.message.includes('timeout'));
+
+      const isNetworkError =
+        error instanceof Error &&
+        (error.message.includes('fetch') || error.message.includes('network'));
+
+      console.log(`Upload attempt ${retryCount + 1} failed:`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        isTimeout,
+        isNetworkError,
+        retryCount,
+      });
+
+      // Only retry on specific errors and if we haven't exceeded max attempts
       if (retryCount < MAX_RETRY_ATTEMPTS) {
-        console.log(`Upload attempt ${retryCount + 1} failed, retrying...`);
-        await sleep(RETRY_DELAY * (retryCount + 1)); // Exponential backoff
-        return uploadWithRetry(formData, retryCount + 1);
+        const shouldRetry =
+          isTimeout ||
+          isNetworkError ||
+          (error instanceof Error && error.message.includes('HTTP 5'));
+
+        if (shouldRetry) {
+          // Exponential backoff with jitter
+          const baseDelay = RETRY_DELAY * Math.pow(2, retryCount);
+          const jitter = Math.random() * 1000; // Add up to 1 second of jitter
+          const delay = baseDelay + jitter;
+
+          console.log(
+            `Retrying upload in ${delay}ms (attempt ${retryCount + 2}/${MAX_RETRY_ATTEMPTS + 1})`,
+          );
+
+          await sleep(delay);
+          return uploadWithRetry(formData, retryCount + 1);
+        }
       }
+
+      // Don't retry on client errors (4xx) or after max attempts
       throw error;
     }
   };
@@ -342,6 +392,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       if (errors.length > 0) {
         setValidationErrors(errors);
+        toast({
+          variant: 'destructive',
+          title: 'File validation failed',
+          description: `${errors.length} file(s) failed validation. Check the errors below.`,
+        });
         return;
       }
 
@@ -356,6 +411,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       setIsUploading(true);
       const totalBytes = filesToUpload.reduce((sum, file) => sum + file.size, 0);
+
       setUploadProgress({
         total: filesToUpload.length,
         uploaded: 0,
@@ -365,16 +421,56 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         totalBytes,
       });
 
+      const uploadStartTime = Date.now();
+
       try {
+        // Pre-upload validation
+        console.log('Starting upload process:', {
+          fileCount: filesToUpload.length,
+          totalSize: `${(totalBytes / 1024 / 1024).toFixed(2)}MB`,
+          files: filesToUpload.map((f) => ({
+            name: f.name,
+            size: `${(f.size / 1024 / 1024).toFixed(2)}MB`,
+            type: f.type,
+          })),
+        });
+
         const formData = new FormData();
-        filesToUpload.forEach((file) => {
+        filesToUpload.forEach((file, index) => {
+          console.log(`Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
           formData.append('images', file);
         });
 
-        const response = await uploadWithRetry(formData);
-        const result = await response.json();
+        // Update progress during upload
+        const progressInterval = setInterval(() => {
+          setUploadProgress((prev) => {
+            if (!prev) return null;
+            const elapsed = Date.now() - uploadStartTime;
+            // const estimatedTotal = (elapsed / Math.max(prev.percentage || 1, 1)) * 100;
+            // Note: 'remaining' calculation is for future enhancement potential
+            // const remaining = Math.max(0, estimatedTotal - elapsed);
 
-        console.log('Upload result:', result);
+            return {
+              ...prev,
+              percentage: Math.min(95, (prev.percentage || 0) + 1), // Slowly increment
+            };
+          });
+        }, 2000);
+
+        const response = await uploadWithRetry(formData);
+
+        clearInterval(progressInterval);
+
+        // Complete progress
+        setUploadProgress((prev) => (prev ? { ...prev, percentage: 100 } : null));
+
+        const result = await response.json();
+        const uploadTime = Date.now() - uploadStartTime;
+
+        console.log('Upload completed successfully:', {
+          uploadTime: `${uploadTime}ms`,
+          result: result.data?.stats,
+        });
         const uploadedImages = result.data.images;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -397,8 +493,49 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             stats?.spaceSaved ? `Space saved: ${stats.spaceSaved}` : ''
           }`,
         });
+
+        // Clear failed uploads on success
+        setFailedUploads([]);
       } catch (error) {
-        console.error('Image upload error:', error);
+        const uploadTime = Date.now() - uploadStartTime;
+
+        console.log('Upload failed:', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          uploadTime,
+          fileCount: filesToUpload.length,
+          totalSize: `${(totalBytes / 1024 / 1024).toFixed(2)}MB`,
+        });
+
+        // Enhanced error handling
+        let errorMessage = 'There was an error uploading your images.';
+        let errorTitle = 'Upload failed';
+
+        if (error instanceof Error) {
+          if (error.message.includes('timeout') || error.name === 'AbortError') {
+            errorTitle = 'Upload timeout';
+            errorMessage =
+              'The upload timed out. This may happen with large files or slow connections. Please try again with smaller files or check your internet connection.';
+          } else if (error.message.includes('HTTP 413')) {
+            errorTitle = 'File too large';
+            errorMessage =
+              'One or more files exceed the server upload limit. Please try with smaller files.';
+          } else if (error.message.includes('HTTP 415')) {
+            errorTitle = 'Unsupported file type';
+            errorMessage =
+              'One or more files have an unsupported format. Please use JPEG, PNG, WebP, or GIF files.';
+          } else if (error.message.includes('HTTP 5')) {
+            errorTitle = 'Server error';
+            errorMessage = 'There was a server error. Please try again in a few moments.';
+          } else if (error.message.includes('network') || error.message.includes('fetch')) {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            errorTitle = 'Network error';
+            errorMessage =
+              'Network connection failed. Please check your internet connection and try again.';
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            errorMessage = error.message;
+          }
+        }
 
         // Add to failed uploads for retry
         const failed: FailedUpload[] = filesToUpload.map((file) => ({
