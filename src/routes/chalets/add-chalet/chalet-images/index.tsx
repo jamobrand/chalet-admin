@@ -29,29 +29,22 @@ export const ChaletImagesStep: React.FC<ChaletImagesStepProps> = ({ setCurrentSt
     defaultValues: {
       images: chaletData.images || [],
     },
+    mode: 'onChange', // Add this to validate on change
   });
 
+  // Add useEffect to trigger validation when images change
+  React.useEffect(() => {
+    form.trigger('images');
+  }, [chaletData.images, form]);
+
   const onSubmit = (data: ChaletImagessData) => {
-    console.log('Form data:', data);
-    console.log('Form errors:', form.formState.errors);
 
-    // Check if form is valid
-    if (!form.formState.isValid) {
-      console.log('Form validation failed');
-      return;
-    }
-
-    console.log('data:', data.images);
     // Update context with form data
     updateChaletData('images', data.images);
 
     // Move to next step
     setCurrentStep(4);
   };
-
-  // Add this in your component to see what the form is receiving
-  console.log('Current form values:', form.getValues());
-  console.log('Form validation state:', form.formState.isValid);
 
   return (
     <Card className="w-full max-w-5xl">
@@ -67,13 +60,15 @@ export const ChaletImagesStep: React.FC<ChaletImagesStepProps> = ({ setCurrentSt
               name="images"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Chalet Images (5-10 recommended)</FormLabel>
+                  <FormLabel>Chalet Images (10-15 recommended)</FormLabel>
                   <FormControl>
                     <ImageUploader
                       images={field.value}
-                      onImagesChange={(images) => field.onChange(images)}
-                      maxImages={10}
-                      disabled={false}
+                      onImagesChange={(images) => {
+                        field.onChange(images);
+                        form.trigger('images'); // Trigger validation immediately
+                      }}
+                      maxImages={15}
                     />
                   </FormControl>
                   <FormMessage />

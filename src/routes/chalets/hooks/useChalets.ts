@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '@/config';
 import { ApiResponse, Chalet } from '../types/types';
@@ -12,3 +12,18 @@ export const useChalets = () => {
     },
   });
 };
+
+export function useDeleteChalet() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, string>({
+    mutationFn: (chaletId) =>
+      axios.delete(`${API_URL}/v1/chalets/admin/delete/${chaletId}`).then((res) => {
+        if (res.data?.message) return;
+        throw new Error('Delete failed');
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chalets'] });
+    },
+  });
+}

@@ -1,6 +1,6 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Chalet } from './types/types';
-//import { ChaletActions } from './chalet-action';
+import { ChaletActions } from './chalet-action';
 
 export const columns: ColumnDef<Chalet>[] = [
   {
@@ -62,8 +62,8 @@ export const columns: ColumnDef<Chalet>[] = [
       </span>
     ),
   },
-  // {
-  //     id: 'actions',
-  //     cell: ({ row }) => <ChaletActions chalet={row.original} />,
-  //   },
+  {
+      id: 'actions',
+      cell: ({ row }) => <ChaletActions chalet={row.original} />,
+    },
 ];
