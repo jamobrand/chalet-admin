@@ -1,5 +1,11 @@
 # atomik-occ
 
+## 0.5.0
+
+### Minor Changes
+
+- 0f47cc8: setup application to work with backend functions
+
 ## 0.4.0
 
 ### Minor Changes
