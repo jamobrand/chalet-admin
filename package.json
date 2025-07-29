@@ -61,10 +61,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Vasmobile-Fintelco-Ltd/atomik-occ.git"
+    "url": "git+https://github.com/jamobrand/chalet-admin.git"
   },
   "bugs": {
-    "url": "https://github.com/Vasmobile-Fintelco-Ltd/atomik-occ.git/issues"
+    "url": "https://github.com/jamobrand/chalet-admin.git/issues"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.8",

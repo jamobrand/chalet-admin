@@ -329,13 +329,13 @@ If you prefer a simpler approach without changesets:
 chalet-admin/
 ├── src/
 │   ├── components/         # Reusable UI components
-│   ├── pages/             # Page components
+│   ├── routes/             # Route pages
+│   ├── pages/             # To know public and private pages
 │   ├── hooks/             # Custom React hooks
-│   ├── services/          # API service functions
-│   ├── utils/             # Utility functions
+│   ├── context/            # Context for adding chalet
+│   ├── libs/             # Utility functions
 │   ├── types/             # TypeScript type definitions
 │   ├── assets/            # Static assets (images, icons)
-│   ├── styles/            # Global styles and themes
 │   └── App.tsx            # Main application component
 ├── public/                # Public assets
 ├── dist/                  # Production build (generated)
